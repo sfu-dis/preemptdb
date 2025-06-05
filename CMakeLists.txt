@@ -1,6 +1,12 @@
 cmake_minimum_required(VERSION 3.1)
 project(preemptdb)
 
+option(USE_LIBUINTRDRIV
+  "whether to use the driver version of the user interrupt support (for unpatched kernels)"
+  OFF
+)
+
+
 # No in-source build
 if("${CMAKE_SOURCE_DIR}" STREQUAL "${CMAKE_BINARY_DIR}")
   message(FATAL_ERROR "In-source builds are not allowed.")
@@ -26,6 +32,10 @@ else()
 
   # link glog for gcc.
   link_directories(/usr/local/lib)
+endif()
+
+if (USE_LIBUINTRDRIV)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DUSE_LIBUINTRDRIV")
 endif()
 
 # Store shared libraries under /lib
@@ -117,6 +127,14 @@ link_libraries(glog::glog)
 
 find_package(gflags REQUIRED COMPONENTS shared)
 link_libraries(gflags_shared)
+
+if (USE_LIBUINTRDRIV)
+find_library(LIBUINTRDRIV uintrdriv)
+if (LIBUINTRDRIV-NOTFOUND)
+  message(FATAL_ERROR "libuintrdriv not found, please download and install from https://github.com/UB-ADBLAB/uintr-driver")
+endif()
+link_libraries(${LIBUINTRDRIV})
+endif()
 
 pkg_check_modules(LIBURING REQUIRED liburing)
 add_compile_options(${LIBURING_CFLAGS_OTHER})

@@ -1,6 +1,7 @@
 #pragma once
 #include <unistd.h>
 #include <x86gprintrin.h>
+#include <uintrintrin.h> /* gcc >= 13 shipped with Ubuntu commented this out */
 #include <cstdint>
 #include <pthread.h>
 #include <stdlib.h>
@@ -8,6 +9,21 @@
 #include <unordered_map>
 #include <mutex>
 #include <atomic>
+
+#ifdef USE_LIBUINTRDRIV
+#include <uintrdriv.h>
+
+#define uintr_register_handler(handler, stack, stack_size, flags)              \
+  (uintr_register_handler(handler, stack, stack_size, flags))
+#define uintr_unregister_handler(receiver_id)                                  \
+  (uintr_unregister_handler(receiver_id))
+#define uintr_register_sender(receiver_id, vector, flags)                      \
+  (uintr_register_sender(receiver_id, vector, flags))
+#define uintr_unregister_sender(idx) (uintr_unregister_sender(idx))
+#define uintr_wait(flags) (noop())
+#define uintr_create_fd(flags) (noop())
+
+#else /* using Intel patched kernel */
 
 #ifndef __NR_uintr_register_handler
 #define __NR_uintr_register_handler   471
@@ -24,6 +40,8 @@
 #define uintr_register_sender(fd, flags)        syscall(__NR_uintr_register_sender, fd, flags)
 #define uintr_unregister_sender(ipi_idx, flags) syscall(__NR_uintr_unregister_sender, ipi_idx, flags)
 #define uintr_wait(flags)                       syscall(__NR_uintr_wait, flags)
+
+#endif
 
 #define NUM_CONTEXTS 2
 #define MAX_CORES 64

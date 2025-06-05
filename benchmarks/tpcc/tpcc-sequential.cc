@@ -1239,7 +1239,12 @@ retry:
       }
 
       for (int i = 0; i < ermia::config::worker_threads; ++i) {
-        int sender_idx = uintr_register_sender(ermia::receiver_fd_map[i], 0);
+        int sender_idx =
+#ifdef USE_LIBUINTRDRIV
+          uintr_register_sender(/*receiver_id=*/ermia::receiver_fd_map[i], /*vector=*/0, /*flags=*/0);
+#else
+          uintr_register_sender(/*uvec_fd=*/ermia::receiver_fd_map[i], /*flags=*/0);
+#endif
         if (sender_idx < 0) {
           printf("[ERROR] Failed to register sender.\n");
           exit(1);
@@ -1311,7 +1316,11 @@ retry:
 
     if (ermia::config::scheduling_policy == 2) {
       for (int i = 0; i < ermia::config::worker_threads; ++i) {
+#ifdef USE_LIBUINTRDRIV
+        uintr_unregister_sender(ermia::sender_idx_map[i]);
+#else
         uintr_unregister_sender(ermia::sender_idx_map[i], 0);
+#endif
       }
     }
 
@@ -1350,9 +1359,14 @@ retry:
       ermia::thread::Thread::MainContext()->gs = _readgsbase_u64();
 
       std::lock_guard<std::mutex> guard(ermia::receiver_fd_map_lock);
+#ifdef USE_LIBUINTRDRIV
+      uintr_receiver_id_t receiver_id = uintr_register_handler(
+          /*handler=*/(void*) interrupt_handler_func, /*stack=*/NULL, /*stacksize=*/0, /*flags=*/0);
+      printf("[INFO] Worker[%d] registered handler\n", worker_id);
+      ermia::receiver_fd_map[worker_id] = receiver_id;
+#else
       uintr_register_handler(interrupt_handler_func, 0);
       printf("[INFO] Worker[%d] registered handler\n", worker_id);
-
       int receiver_fd = uintr_create_fd(worker_id, 0);
       if (receiver_fd < 0) {
         perror(NULL);
@@ -1361,6 +1375,7 @@ retry:
       }
       printf("[INFO] Worker[%d] created receiver fd %d\n", worker_id, receiver_fd);
       ermia::receiver_fd_map[worker_id] = receiver_fd;
+#endif
     }
 
     barrier_a->count_down();
